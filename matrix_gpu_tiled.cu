@@ -8,40 +8,36 @@ __global__ void matrixMultiplyTiled(const float *A, const float *B, float *C, in
     __shared__ float ds_A[TILE_WIDTH][TILE_WIDTH];
     __shared__ float ds_B[TILE_WIDTH][TILE_WIDTH];
 
-    int bx = blockIdx.x, by = blockIdx.y;
-    int tx = threadIdx.x, ty = threadIdx.y;
+    int bx = blockIdx.x; 
+    int by = blockIdx.y;
+    int tx = threadIdx.x; 
+    int ty = threadIdx.y;
 
     int Row = by * TILE_WIDTH + ty;
     int Col = bx * TILE_WIDTH + tx;
 
     float Pvalue = 0.0f;
-
-    // number of tiles to iterate over
     int numTiles = (N + TILE_WIDTH - 1) / TILE_WIDTH;
 
     for (int m = 0; m < numTiles; ++m) {
-        int tiledColA = m * TILE_WIDTH + tx; // column in A
-        int tiledRowB = m * TILE_WIDTH + ty; // row in B
+        int tiledColA = m * TILE_WIDTH + tx;
+        int tiledRowB = m * TILE_WIDTH + ty;
 
-        // Load tile from A into shared memory
         if (Row < N && tiledColA < N)
             ds_A[ty][tx] = A[Row * N + tiledColA];
         else
             ds_A[ty][tx] = 0.0f;
 
-        // Load tile from B into shared memory
-        if (Col < N && tiledRowB < N)
+        if (tiledRowB < N && Col < N)
             ds_B[ty][tx] = B[tiledRowB * N + Col];
         else
             ds_B[ty][tx] = 0.0f;
 
         __syncthreads();
 
-        // Compute partial product for this tile
         #pragma unroll
-        for (int k = 0; k < TILE_WIDTH; ++k) {
+        for (int k = 0; k < TILE_WIDTH; ++k)
             Pvalue += ds_A[ty][k] * ds_B[k][tx];
-        }
 
         __syncthreads();
     }
@@ -69,44 +65,54 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    srand(0);
     for (int i = 0; i < N * N; i++) {
-        h_A[i] = (float)(rand() % 100) / 100.0f;
-        h_B[i] = (float)(rand() % 100) / 100.0f;
+        h_A[i] = 1.0f;
+        h_B[i] = 1.0f;
     }
 
-    float *d_A, *d_B, *d_C;
-    checkCuda(cudaMalloc((void**)&d_A, bytes), "cudaMalloc A");
-    checkCuda(cudaMalloc((void**)&d_B, bytes), "cudaMalloc B");
-    checkCuda(cudaMalloc((void**)&d_C, bytes), "cudaMalloc C");
+    float *d_A = NULL, *d_B = NULL, *d_C = NULL;
+    checkCuda(cudaMalloc((void**)&d_A, bytes), "cudaMalloc d_A");
+    checkCuda(cudaMalloc((void**)&d_B, bytes), "cudaMalloc d_B");
+    checkCuda(cudaMalloc((void**)&d_C, bytes), "cudaMalloc d_C");
 
-    checkCuda(cudaMemcpy(d_A, h_A, bytes, cudaMemcpyHostToDevice), "H2D A");
-    checkCuda(cudaMemcpy(d_B, h_B, bytes, cudaMemcpyHostToDevice), "H2D B");
+    checkCuda(cudaMemcpy(d_A, h_A, bytes, cudaMemcpyHostToDevice), "H2D memcpy A");
+    checkCuda(cudaMemcpy(d_B, h_B, bytes, cudaMemcpyHostToDevice), "H2D memcpy B");
 
-    dim3 block(TILE_WIDTH, TILE_WIDTH);
-    dim3 grid((N + TILE_WIDTH - 1) / TILE_WIDTH, (N + TILE_WIDTH - 1) / TILE_WIDTH);
+    dim3 dimBlock(TILE_WIDTH, TILE_WIDTH);
+    dim3 dimGrid((N + TILE_WIDTH - 1) / TILE_WIDTH, (N + TILE_WIDTH - 1) / TILE_WIDTH);
 
     cudaEvent_t start, stop;
-    checkCuda(cudaEventCreate(&start), "EventCreate start");
-    checkCuda(cudaEventCreate(&stop), "EventCreate stop");
+    checkCuda(cudaEventCreate(&start), "eventCreate start");
+    checkCuda(cudaEventCreate(&stop), "eventCreate stop");
 
-    checkCuda(cudaEventRecord(start), "EventRecord start");
-    matrixMultiplyTiled<<<grid, block>>>(d_A, d_B, d_C, N);
-    checkCuda(cudaGetLastError(), "Kernel launch");
-    checkCuda(cudaEventRecord(stop), "EventRecord stop");
-    checkCuda(cudaEventSynchronize(stop), "EventSync stop");
+    // Warm-up
+    matrixMultiplyTiled<<<dimGrid, dimBlock>>>(d_A, d_B, d_C, N);
+    checkCuda(cudaGetLastError(), "warmup launch");
+    checkCuda(cudaDeviceSynchronize(), "warmup sync");
+
+    checkCuda(cudaEventRecord(start), "eventRecord start");
+    matrixMultiplyTiled<<<dimGrid, dimBlock>>>(d_A, d_B, d_C, N);
+    checkCuda(cudaGetLastError(), "tiled launch");
+    checkCuda(cudaEventRecord(stop), "eventRecord stop");
+    checkCuda(cudaEventSynchronize(stop), "eventSync stop");
 
     float ms = 0.0f;
-    checkCuda(cudaEventElapsedTime(&ms, start, stop), "ElapsedTime");
+    checkCuda(cudaEventElapsedTime(&ms, start, stop), "elapsedTime");
 
-    // optional: copy back (not included in kernel timing above)
-    checkCuda(cudaMemcpy(h_C, d_C, bytes, cudaMemcpyDeviceToHost), "D2H C");
+    printf("Optimized CUDA (tiled) kernel time (N=%d): %f ms\n", N, ms);
 
-    printf("Tiled CUDA kernel time (N=%d): %.3f ms\n", N, ms);
+    checkCuda(cudaMemcpy(h_C, d_C, bytes, cudaMemcpyDeviceToHost), "D2H memcpy C");
 
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
-    cudaFree(d_A); cudaFree(d_B); cudaFree(d_C);
-    free(h_A); free(h_B); free(h_C);
+
+    cudaFree(d_A);
+    cudaFree(d_B);
+    cudaFree(d_C);
+
+    free(h_A);
+    free(h_B);
+    free(h_C);
+
     return 0;
 }
