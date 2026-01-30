@@ -136,6 +136,24 @@ int save_raw(const char *filename, unsigned int *image, int M) {
     return 1;
 }
 
+void print_usage(const char *program_name) {
+    printf("Usage: %s -i <input> -o <output> -m <size> -k <kernel>\n\n", program_name);
+    printf("Arguments:\n");
+    printf("  -i <input>    Input RAW image file (single channel)\n");
+    printf("  -o <output>   Output RAW image file\n");
+    printf("  -m <size>     Image size (must be square, e.g., 256, 512, 1024)\n");
+    printf("  -k <kernel>   Kernel type:\n");
+    printf("                  sobel_x   - Sobel X edge detection (3x3)\n");
+    printf("                  sobel_y   - Sobel Y edge detection (3x3)\n");
+    printf("                  laplacian - Laplacian edge detection (3x3)\n");
+    printf("                  sharpen   - Sharpening (3x3)\n");
+    printf("                  box       - Box blur (3x3)\n");
+    printf("                  gaussian  - Gaussian blur (5x5)\n");
+    printf("                  box7      - Box blur (7x7)\n");
+    printf("\nExample:\n");
+    printf("  %s -i input.raw -o output.raw -m 512 -k sobel_x\n", program_name);
+}
+
 
 int main(int argc, char **argv) {
     // default arguments
@@ -229,7 +247,7 @@ int main(int argc, char **argv) {
     if (save_raw(output_file, output, M)) {
         printf("Output saved to: %s\n", output_file);
     }
-    
+
     // release space
     free(input);
     free(output);
