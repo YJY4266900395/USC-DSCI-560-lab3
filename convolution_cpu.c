@@ -1,6 +1,7 @@
 // 2D convolution on CPU implementation
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 // Sobel X - detect vertical edges (N=3)
@@ -76,6 +77,48 @@ void convolution2D(unsigned int *input, unsigned int *output, int M, float *kern
 }
 
 
-int main() {
-    // TODO: Test image, conv, timing, output
+int main(int argc, char **argv) {
+    // default arguments
+    int M = 512;  // image size
+    int N = 3;    // kernel size
+    float *filter = sobel_x;
+    
+    // argument for image size
+    if (argc > 1) {
+        M = atoi(argv[1]);
+    }
+    
+    printf("=== CPU Convolution ===\n");
+    printf("Image size: %d x %d\n", M, M);
+    printf("Convolution kernel size: %d x %d\n", N, N);
+    
+    // assign space
+    unsigned int *input = (unsigned int *)malloc(M * M * sizeof(unsigned int));
+    unsigned int *output = (unsigned int *)malloc(M * M * sizeof(unsigned int));
+    
+    if (!input || !output) {
+        printf("Error: memory allocation failed\n");
+        return 1;
+    }
+
+    // simple test data
+    for (int i = 0; i < M * M; i++) {
+        input[i] = rand() % 256;
+    }
+    
+    // convolution w/ timing
+    clock_t start = clock();
+    convolution2D(input, output, M, sobel_x, 3);
+    clock_t end = clock();
+    
+    double elapsed = (double)(end - start) / CLOCKS_PER_SEC;
+    printf("CPU time: %f seconds\n", elapsed);
+
+    
+    // release space
+    free(input);
+    free(output);
+    
+    printf("Done!\n");
+    return 0;
 }
