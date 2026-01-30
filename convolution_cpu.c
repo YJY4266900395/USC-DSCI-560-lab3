@@ -39,7 +39,19 @@ float box_blur[9] = {
     0.111f, 0.111f, 0.111f
 };
 
-// TODO: Implement the convolution function here
+// Gaussian blur (N=5)
+float gaussian_5x5[25] = {
+    1/256.0f,  4/256.0f,  6/256.0f,  4/256.0f, 1/256.0f,
+    4/256.0f, 16/256.0f, 24/256.0f, 16/256.0f, 4/256.0f,
+    6/256.0f, 24/256.0f, 36/256.0f, 24/256.0f, 6/256.0f,
+    4/256.0f, 16/256.0f, 24/256.0f, 16/256.0f, 4/256.0f,
+    1/256.0f,  4/256.0f,  6/256.0f,  4/256.0f, 1/256.0f
+};
+
+// Box blur (N=7)
+float box_blur_7x7[49];    // will be initialized in main
+
+
 void convolution2D(unsigned int *input, unsigned int *output, int M, float *kernel, int N) {
     // M = image size M*M
     // N = kernel size N*N
@@ -76,44 +88,147 @@ void convolution2D(unsigned int *input, unsigned int *output, int M, float *kern
     }
 }
 
+// read .raw image
+unsigned int* load_raw(const char *filename, int M) {
+    FILE *fp = fopen(filename, "rb");
+    if (!fp) {
+        printf("Error: Cannot open input file '%s'\n", filename);
+        return NULL;
+    }
+    
+    unsigned int *image = (unsigned int *)malloc(M * M * sizeof(unsigned int));
+    if (!image) {
+        printf("Error: Memory allocation failed\n");
+        fclose(fp);
+        return NULL;
+    }
+    
+    // read every pixel
+    for (int i = 0; i < M * M; i++) {
+        unsigned char pixel;
+        if (fread(&pixel, 1, 1, fp) != 1) {
+            printf("Error: Failed to read pixel %d\n", i);
+            free(image);
+            fclose(fp);
+            return NULL;
+        }
+        image[i] = pixel;
+    }
+    
+    fclose(fp);
+    return image;
+}
+
+// save .raw image after convolution
+int save_raw(const char *filename, unsigned int *image, int M) {
+    FILE *fp = fopen(filename, "wb");
+    if (!fp) {
+        printf("Error: Cannot open output file '%s'\n", filename);
+        return 0;
+    }
+    
+    for (int i = 0; i < M * M; i++) {
+        unsigned char pixel = (unsigned char)(image[i] & 0xFF);
+        fwrite(&pixel, 1, 1, fp);
+    }
+    
+    fclose(fp);
+    return 1;
+}
+
 
 int main(int argc, char **argv) {
     // default arguments
-    int M = 512;  // image size
-    int N = 3;    // kernel size
-    float *filter = sobel_x;
-    
-    // argument for image size
-    if (argc > 1) {
-        M = atoi(argv[1]);
+    char *input_file = NULL;
+    char *output_file = NULL;
+    int M = 0;
+    char *kernel_name = NULL;
+    float *filter = NULL;
+    int N = 3;
+
+    // initialize 7x7 box blur
+    for (int i = 0; i < 49; i++) {
+        box_blur_7x7[i] = 1.0f / 49.0f;
     }
     
-    printf("=== CPU Convolution ===\n");
-    printf("Image size: %d x %d\n", M, M);
-    printf("Convolution kernel size: %d x %d\n", N, N);
-    
-    // assign space
-    unsigned int *input = (unsigned int *)malloc(M * M * sizeof(unsigned int));
-    unsigned int *output = (unsigned int *)malloc(M * M * sizeof(unsigned int));
-    
-    if (!input || !output) {
-        printf("Error: memory allocation failed\n");
+    // arguments from command line
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-i") == 0 && i + 1 < argc) {
+            input_file = argv[++i];
+        } else if (strcmp(argv[i], "-o") == 0 && i + 1 < argc) {
+            output_file = argv[++i];
+        } else if (strcmp(argv[i], "-m") == 0 && i + 1 < argc) {
+            M = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "-k") == 0 && i + 1 < argc) {
+            kernel_name = argv[++i];
+        } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            print_usage(argv[0]);
+            return 0;
+        }
+    }
+
+    // check necessary arguments
+    if (!input_file || !output_file || M == 0 || !kernel_name) {
+        printf("Error: Missing required arguments.\n\n");
+        print_usage(argv[0]);
         return 1;
     }
 
-    // simple test data
-    for (int i = 0; i < M * M; i++) {
-        input[i] = rand() % 256;
+    // select kernel
+    if (strcmp(kernel_name, "sobel_x") == 0) {
+        filter = sobel_x; N = 3;
+    } else if (strcmp(kernel_name, "sobel_y") == 0) {
+        filter = sobel_y; N = 3;
+    } else if (strcmp(kernel_name, "laplacian") == 0) {
+        filter = laplacian; N = 3;
+    } else if (strcmp(kernel_name, "sharpen") == 0) {
+        filter = sharpen; N = 3;
+    } else if (strcmp(kernel_name, "box") == 0) {
+        filter = box_blur; N = 3;
+    } else if (strcmp(kernel_name, "gaussian") == 0) {
+        filter = gaussian_5x5; N = 5;
+    } else if (strcmp(kernel_name, "box7") == 0) {
+        filter = box_blur_7x7; N = 7;
+    } else {
+        printf("Error: Unknown kernel '%s'\n\n", kernel_name);
+        print_usage(argv[0]);
+        return 1;
     }
     
+    printf("=== CPU Convolution ===\n");
+    printf("Input:  %s\n", input_file);
+    printf("Output: %s\n", output_file);
+    printf("Image size: %d x %d\n", M, M);
+    printf("Kernel: %s (%d x %d)\n", kernel_name, N, N);
+    
+    // read input image
+    unsigned int *input = load_raw(input_file, M);
+    if (!input) {
+        return 1;
+    }
+
+    // assign output space
+    unsigned int *output = (unsigned int *)malloc(M * M * sizeof(unsigned int));
+    if (!output) {
+        printf("Error: Memory allocation failed\n");
+        free(input);
+        return 1;
+    }
+
+    
     // convolution w/ timing
+    printf("Processing...\n");
     clock_t start = clock();
-    convolution2D(input, output, M, sobel_x, 3);
+    convolution2D(input, output, M, filter, N);
     clock_t end = clock();
     
     double elapsed = (double)(end - start) / CLOCKS_PER_SEC;
     printf("CPU time: %f seconds\n", elapsed);
 
+    // save output image
+    if (save_raw(output_file, output, M)) {
+        printf("Output saved to: %s\n", output_file);
+    }
     
     // release space
     free(input);
