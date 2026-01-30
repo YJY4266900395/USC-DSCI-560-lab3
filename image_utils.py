@@ -67,9 +67,8 @@ def create_test_image(output_path, size=512):
     arr.tofile(output_path)
     print(f"Created test image: {output_path} ({size}x{size})")
 
-def graph(input_path, output_path):
+def graph(input_path, output_path, size=512):
     """Display the RAW images as graph using matplotlib"""
-    size = 512
 
     input_img = np.fromfile(input_path, dtype=np.uint8).reshape(size, size)
     output_img = np.fromfile(output_path, dtype=np.uint8).reshape(size, size)
@@ -87,12 +86,12 @@ def print_usage():
     print("  python image_utils.py png2raw <input.png> <output.raw> [size]")
     print("  python image_utils.py raw2png <input.raw> <output.png> <size>")
     print("  python image_utils.py test <output.raw> [size]")
-    print("  python image_utils.py graph <input.raw> <output.raw>")
+    print("  python image_utils.py graph <image1.raw> <image2.raw> [size]")
     print("\nExamples:")
     print("  python image_utils.py test input.raw 512")
     print("  python image_utils.py png2raw photo.jpg input.raw 512")
     print("  python image_utils.py raw2png output.raw result.png 512")
-    print("  python image_utils.py graph input.raw output.raw")
+    print("  python image_utils.py graph input.raw output.raw 256")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -125,7 +124,8 @@ if __name__ == "__main__":
         if len(sys.argv) < 4:
             print_usage()
             sys.exit(1)
-        graph(sys.argv[2], sys.argv[3])
+        size = int(sys.argv[4]) if len(sys.argv) > 4 else 512
+        graph(sys.argv[2], sys.argv[3], size)
     
     else:
         print(f"Unknown command: {cmd}")
