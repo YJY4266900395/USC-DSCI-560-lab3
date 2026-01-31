@@ -1,0 +1,8 @@
+.DS_Store
+test.*
+*temp*
+*.raw
+*.jpg
+*.png
+venv
+build/
