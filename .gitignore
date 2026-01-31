@@ -6,3 +6,4 @@ test.*
 *.png
 venv
 build/
+*.so

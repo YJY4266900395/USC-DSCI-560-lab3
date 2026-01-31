@@ -55,7 +55,6 @@ float box_blur_7x7[49];    // will be initialized in main
 void convolution2D(unsigned int *input, unsigned int *output, int M, float *kernel, int N) {
     // M = image size M*M
     // N = kernel size N*N
-    // TODO: Convolution implementation
     int radius = N / 2;
 
     // loop all output i,j
