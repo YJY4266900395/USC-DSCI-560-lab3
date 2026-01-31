@@ -1,6 +1,8 @@
 .DS_Store
-*test*
+test.*
 *temp*
 *.raw
 *.jpg
 *.png
+venv
+build/

@@ -67,7 +67,7 @@ def create_test_image(output_path, size=512):
     arr.tofile(output_path)
     print(f"Created test image: {output_path} ({size}x{size})")
 
-def graph(input_path, output_path, size=512):
+def graph(input_path, output_path, size=512, save=False):
     """Display the RAW images as graph using matplotlib"""
 
     input_img = np.fromfile(input_path, dtype=np.uint8).reshape(size, size)
@@ -79,14 +79,19 @@ def graph(input_path, output_path, size=512):
     ax1.set_title('Input')
     ax2.imshow(output_img, cmap='gray')
     ax2.set_title('Output')
-    plt.show()
+
+    if save:
+        plt.savefig(f'comparison_{size}.png')
+        print(f"Saved comparison graph as 'comparison_{size}.png'")
+    else:
+        plt.show()
 
 def print_usage():
     print("Usage:")
     print("  python image_utils.py png2raw <input.png> <output.raw> [size]")
     print("  python image_utils.py raw2png <input.raw> <output.png> <size>")
     print("  python image_utils.py test <output.raw> [size]")
-    print("  python image_utils.py graph <image1.raw> <image2.raw> [size]")
+    print("  python image_utils.py graph <image1.raw> <image2.raw> [size] <--save>")
     print("\nExamples:")
     print("  python image_utils.py test input.raw 512")
     print("  python image_utils.py png2raw photo.jpg input.raw 512")
@@ -125,7 +130,8 @@ if __name__ == "__main__":
             print_usage()
             sys.exit(1)
         size = int(sys.argv[4]) if len(sys.argv) > 4 else 512
-        graph(sys.argv[2], sys.argv[3], size)
+        save = '--save' in sys.argv
+        graph(sys.argv[2], sys.argv[3], size, save)
     
     else:
         print(f"Unknown command: {cmd}")
